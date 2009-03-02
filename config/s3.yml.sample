@@ -1,0 +1,5 @@
+---
+  :bucket: repo.example.com
+  :default_acl: authenticated_read
+  :access_key_id: AWSAccessKeyId
+  :secret_access_key: SecretAccessKey

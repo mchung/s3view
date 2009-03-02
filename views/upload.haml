@@ -1,0 +1,18 @@
+%form{:action => s3_action, :method => "post", :enctype => "multipart/form-data"}
+  %dl
+    %dt
+      Filename
+    %dd
+      %input{:name => "key", :type => "text"}
+    %dt
+      File
+    %dd
+      %input{:name => "file", :type => "file"}
+    %input{:name => "acl", :type => "hidden", :value => default_acl}
+    %input{:name => "Content-Type", :type => "hidden", :value => "text/plain"}
+    %input{:name => "AWSAccessKeyId", :type => "hidden", :value => access_key_id}
+    %input{:name => "policy", :type => "hidden", :value => policy}
+    %input{:name => "signature", :type => "hidden", :value => signature}
+  %input{:name => "submit", :type => "submit", :value => "Upload"}
+  %pre
+    = policy_document
