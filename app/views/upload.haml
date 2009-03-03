@@ -1,4 +1,9 @@
 %form{:action => s3_action, :method => "post", :enctype => "multipart/form-data"}
+  %input{:name => "acl", :type => "hidden", :value => default_acl}
+  %input{:name => "Content-Type", :type => "hidden", :value => "text/plain"}
+  %input{:name => "AWSAccessKeyId", :type => "hidden", :value => access_key_id}
+  %input{:name => "policy", :type => "hidden", :value => @policy_document}
+  %input{:name => "signature", :type => "hidden", :value => @signature}
   %dl
     %dt
       Filename
@@ -7,10 +12,7 @@
     %dt
       File
     %dd
+      - # The +file+ field must be the last one in the form, 
+      - # as any fields below it are ignored by S3.
       %input{:name => "file", :type => "file"}
-    %input{:name => "acl", :type => "hidden", :value => default_acl}
-    %input{:name => "Content-Type", :type => "hidden", :value => "text/plain"}
-    %input{:name => "AWSAccessKeyId", :type => "hidden", :value => access_key_id}
-    %input{:name => "policy", :type => "hidden", :value => @policy_document}
-    %input{:name => "signature", :type => "hidden", :value => @signature}
   %input{:name => "submit", :type => "submit", :value => "Upload"}
