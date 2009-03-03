@@ -11,8 +11,6 @@
     %input{:name => "acl", :type => "hidden", :value => default_acl}
     %input{:name => "Content-Type", :type => "hidden", :value => "text/plain"}
     %input{:name => "AWSAccessKeyId", :type => "hidden", :value => access_key_id}
-    %input{:name => "policy", :type => "hidden", :value => policy}
-    %input{:name => "signature", :type => "hidden", :value => signature}
+    %input{:name => "policy", :type => "hidden", :value => @policy_document}
+    %input{:name => "signature", :type => "hidden", :value => @signature}
   %input{:name => "submit", :type => "submit", :value => "Upload"}
-  %pre
-    = policy_document

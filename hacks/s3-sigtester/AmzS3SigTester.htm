@@ -1,0 +1,278 @@
+<html>
+  <head><title>Amazon S3 Signature Tester</title></head>
+  <body style="text-align: center;">
+    <h1>Amazon S3 Signature Tester</h1>
+    <p style="text-align: left;">This is a tool to help figure out why Amazon S3 is responding with InvalidSecurity error messages.  It takes two parameters:</P>
+		<ol style="text-align: left;">
+			<li>a hex-encoded canonical string, and </li>
+			<li>an AWS Secret Access Key.</li>
+		</ol>
+	<p style="text-align: left;">The hex-encoded canonical string is returned by Amazon S3 in the error document and represents what the server thought you should have used as your canonical string.</p>
+    <p style="text-align: left;"><b>Important Security Note:</b>  Amazon has always told its AWS customers to never share their AWS Secret Access Key with anyone, especially never type it into an html text field anywhere.  There are two secure options here:
+		<ol style="text-align: left;">
+			<li>Configure your program to use a fake secret access key (any random string will work), type the same fake secret access key into this form, then compare the results produced by your program and this tool.</li>
+			<li>Download this document to your local machine, check the source to ensure that it isn't doing anything evil like mailing your keys to attackers and then run the script from your machine.</li>
+		</ol></p>
+
+    <p style="text-align: left;">When you fill out these two fields and click "Get Signature", the script will respond with three values:
+		<ol style="text-align: left;">
+			<li>The first is the decoded canonical string as it should be in your program.  Note that we've used "\n" to represent newlines, just as you probably will in your program.  Make sure that you are really using newlines in your program, as opposed to a literal '\' followed by a 'n'.  In most languages this is done by wrapping the string in double quotes instead of single quotes.  You should check that the canonical string in your program matches exactly, as extra spaces or newlines will screw things up.</li>
+			<li>The signature that should be used for standard REST authentication and SOAP authentication.</li>
+			<li>The urlencoded version of the signature, which is used for REST query string authentication.</li>
+		</ol></p>
+	<p style="text-align: left;">If your canonical string matches, but your signature does not, then there is something wrong in the way that you compute the hmac-sha1 hash. Please see the readme file for further instruction.</p>
+    <form onsubmit="return false;">
+    <div>
+      <b>Hex Encoded String to sign</b> (Returned in the InvalidSecurity error document as the StringToSignBytes element.)
+      <br/>
+      <input type="radio" name="inputType" checked="yes" value="hex">Hex: <input size="150" name="hexString" type="text" value="" />
+    </div>
+    <div>
+      <b>B64 Encoded String to sign</b> (From the results of Base64 encoding the policy document)
+      <br/>
+      <input type="radio" name="inputType" value="b64">B64: <input size="150" name="b64String" type="text" value="" />
+    </div>
+    <div style="margin-top: 20px;">
+<b>AWS Secret Access Key</b> (Never share your real AWS secret access key with anyone.  Be sure to read the Important Security Note above very carefully.)
+      <input size="150" name="secretKey" type="text" value="" />
+
+    </div>
+    <div style="margin-top: 20px;">
+      <input type="submit" value="Get Signature" onclick="getCanonicalString()">
+    </div>
+    </form>
+    <div align="center" valign="top" id="info" />
+
+    <script>
+
+    var charArray = new Array(
+			' ', '!', '"', '#', '$', '%', '&', "'", '(', ')', '*', '+', ',', '-',
+			'.', '/', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', ';',
+			'<', '=', '>', '?', '@', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I',
+			'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W',
+			'X', 'Y', 'Z', '[', '\\', ']', '^', '_', '`', 'a', 'b', 'c', 'd', 'e',
+			'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
+			't', 'u', 'v', 'w', 'x', 'y', 'z', '{', '|', '}', '~', '', 'Ç', 'ü',
+			'é', 'â', 'ä', 'à', 'å', 'ç', 'ê', 'ë', 'è', 'ï', 'î', 'ì', 'Ä', 'Å',
+			'É', 'æ', 'Æ', 'ô', 'ö', 'ò', 'û', 'ù', 'ÿ', 'Ö', 'Ü', 'ø', '£', 'Ø',
+			'×', 'ƒ', 'á', 'í', 'ó', 'ú', 'ñ', 'Ñ', 'ª', 'º', '¿', '®', '¬', '½',
+			'¼', '¡', '«', '»', '_', '_', '_', '¦', '¦', 'Á', 'Â', 'À', '©', '¦',
+			'¦', '+', '+', '¢', '¥', '+', '+', '-', '-', '+', '-', '+', 'ã', 'Ã',
+			'+', '+', '-', '-', '¦', '-', '+', '¤', 'ð', 'Ð', 'Ê', 'Ë', 'È', 'i',
+			'Í', 'Î', 'Ï', '+', '+', '_', '_', '¦', 'Ì', '_', 'Ó', 'ß', 'Ô', 'Ò',
+			'õ', 'Õ', 'µ', 'þ', 'Þ', 'Ú', 'Û', 'Ù', 'ý', 'Ý', '¯', '´', '­', '±',
+			'_', '¾', '¶', '§', '÷', '¸', '°', '¨', '·', '¹', '³', '²', '_', ' ');
+	//-----------------------------------------------------------------------------
+		function getCanonicalString(){
+			var form = document.forms[0];
+			if (form.inputType[0].checked) {
+        hexString = form.hexString.value;
+			  var canonicalString = chars_from_hex(hexString);
+			} else {
+			  var canonicalString = form.b64String.value;
+			}
+      var secretKey = form.secretKey.value;
+			var str_to_sign = canonicalString.replace(/\\n/g, "\n");
+			var signature = b64_hmac_sha1 (secretKey, str_to_sign);
+			document.getElementById("info").innerHTML = display(canonicalString, signature);			
+		}
+	//---------------------------------------------------------------------------	
+		function clean_numstr(raw_str, base){
+			var ret_str = "";
+			var c = "";
+			var i;
+			for(i=0; i < raw_str.length; i++) {
+				c = raw_str.charAt(i);
+				if(c == "0" || parseInt(c, base) > 0) {
+					ret_str += c;
+				}
+			}
+			return ret_str;
+		}
+	//---------------------------------------------------------------------------
+		function chars_from_hex(hexString){
+			var hex_str = clean_numstr(hexString, 16);
+			var char_str = "";
+			var num_str = "";
+			var i;
+			for(i=0; i < hex_str.length; i+=2)
+				char_str += byteToChar(parseInt(hex_str.substring(i, i+2), 16));
+			return(char_str);
+		}
+	//---------------------------------------------------------------------------
+		function byteToChar(n){
+			if(n==10) return "\\n";
+			else if(n < 32 || n > 255) return " ";
+			else return charArray[n-32];
+		}
+	//---------------------------------------------------------------------------
+		function display(canonicalString, signature){
+			var message = "String to be signed: <b>" + canonicalString + "</b>"
+							+ "<br>Signature (using secret key):  <b>" + signature + "</b>"
+			 				+ "<br>URL encoded signature (for query strings): <b>" + encodeURIComponent(signature) + "</b>";
+			return message;
+		}
+
+
+/*****************************************************************************
+ * A JavaScript implementation of the Secure Hash Algorithm, SHA-1, as defined
+ * in FIPS PUB 180-1
+ * Version 2.1a Copyright Paul Johnston 2000 - 2002.
+ * Other contributors: Greg Holt, Andrew Kepert, Ydnar, Lostinet
+ * Distributed under the BSD License
+ * See http://pajhome.org.uk/crypt/md5 for details.
+ */
+
+/*
+ * Configurable variables. You may need to tweak these to be compatible with
+ * the server-side, but the defaults work in most cases.
+ */
+var b64pad  = "="; /* base-64 pad character. "=" for strict RFC compliance   */
+var chrsz   = 8;  /* bits per input character. 8 - ASCII; 16 - Unicode      */
+
+function b64_hmac_sha1(key, data) { return binb2b64(core_hmac_sha1(key, data));}
+
+/*
+ * Calculate the SHA-1 of an array of big-endian words, and a bit length
+ */
+function core_sha1(x, len)
+{
+  /* append padding */
+  x[len >> 5] |= 0x80 << (24 - len % 32);
+  x[((len + 64 >> 9) << 4) + 15] = len;
+
+  var w = Array(80);
+  var a =  1732584193;
+  var b = -271733879;
+  var c = -1732584194;
+  var d =  271733878;
+  var e = -1009589776;
+
+  for(var i = 0; i < x.length; i += 16)
+  {
+    var olda = a;
+    var oldb = b;
+    var oldc = c;
+    var oldd = d;
+    var olde = e;
+
+    for(var j = 0; j < 80; j++)
+    {
+      if(j < 16) w[j] = x[i + j];
+      else w[j] = rol(w[j-3] ^ w[j-8] ^ w[j-14] ^ w[j-16], 1);
+      var t = safe_add(safe_add(rol(a, 5), sha1_ft(j, b, c, d)),
+                       safe_add(safe_add(e, w[j]), sha1_kt(j)));
+      e = d;
+      d = c;
+      c = rol(b, 30);
+      b = a;
+      a = t;
+    }
+
+    a = safe_add(a, olda);
+    b = safe_add(b, oldb);
+    c = safe_add(c, oldc);
+    d = safe_add(d, oldd);
+    e = safe_add(e, olde);
+  }
+  return Array(a, b, c, d, e);
+
+}
+
+/*
+ * Perform the appropriate triplet combination function for the current
+ * iteration
+ */
+function sha1_ft(t, b, c, d)
+{
+  if(t < 20) return (b & c) | ((~b) & d);
+  if(t < 40) return b ^ c ^ d;
+  if(t < 60) return (b & c) | (b & d) | (c & d);
+  return b ^ c ^ d;
+}
+
+/*
+ * Determine the appropriate additive constant for the current iteration
+ */
+function sha1_kt(t)
+{
+  return (t < 20) ?  1518500249 : (t < 40) ?  1859775393 :
+         (t < 60) ? -1894007588 : -899497514;
+}
+
+/*
+ * Calculate the HMAC-SHA1 of a key and some data
+ */
+function core_hmac_sha1(key, data)
+{
+  var bkey = str2binb(key);
+  if(bkey.length > 16) bkey = core_sha1(bkey, key.length * chrsz);
+
+  var ipad = Array(16), opad = Array(16);
+  for(var i = 0; i < 16; i++)
+  {
+    ipad[i] = bkey[i] ^ 0x36363636;
+    opad[i] = bkey[i] ^ 0x5C5C5C5C;
+  }
+
+  var hash = core_sha1(ipad.concat(str2binb(data)), 512 + data.length * chrsz);
+  return core_sha1(opad.concat(hash), 512 + 160);
+}
+
+/*
+ * Add integers, wrapping at 2^32. This uses 16-bit operations internally
+ * to work around bugs in some JS interpreters.
+ */
+function safe_add(x, y)
+{
+  var lsw = (x & 0xFFFF) + (y & 0xFFFF);
+  var msw = (x >> 16) + (y >> 16) + (lsw >> 16);
+  return (msw << 16) | (lsw & 0xFFFF);
+}
+
+/*
+ * Bitwise rotate a 32-bit number to the left.
+ */
+function rol(num, cnt)
+{
+  return (num << cnt) | (num >>> (32 - cnt));
+}
+
+/*
+ * Convert an 8-bit or 16-bit string to an array of big-endian words
+ * In 8-bit function, characters >255 have their hi-byte silently ignored.
+ */
+function str2binb(str)
+{
+  var bin = Array();
+  var mask = (1 << chrsz) - 1;
+  for(var i = 0; i < str.length * chrsz; i += chrsz)
+    bin[i>>5] |= (str.charCodeAt(i / chrsz) & mask) << (32 - chrsz - i%32);
+  return bin;
+}
+
+/*
+ * Convert an array of big-endian words to a base-64 string
+ */
+function binb2b64(binarray)
+{
+  var tab = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  var str = "";
+  for(var i = 0; i < binarray.length * 4; i += 3)
+  {
+    var triplet = (((binarray[i   >> 2] >> 8 * (3 -  i   %4)) & 0xFF) << 16)
+                | (((binarray[i+1 >> 2] >> 8 * (3 - (i+1)%4)) & 0xFF) << 8 )
+                |  ((binarray[i+2 >> 2] >> 8 * (3 - (i+2)%4)) & 0xFF);
+    for(var j = 0; j < 4; j++)
+    {
+      if(i * 8 + j * 6 > binarray.length * 32) str += b64pad;
+      else str += tab.charAt((triplet >> 6*(3-j)) & 0x3F);
+    }
+  }
+  return str;
+}
+//************************************************************************************
+    </script>
+  </body>
+
+</html>
